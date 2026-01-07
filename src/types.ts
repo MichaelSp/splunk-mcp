@@ -8,6 +8,12 @@ export interface SplunkConfig {
   verifySSL: boolean;
 }
 
+export interface SignalFxConfig {
+  accessToken: string;
+  realm?: string;
+  baseUrl?: string;
+}
+
 export interface SplunkSearchResult {
   [key: string]: unknown;
 }

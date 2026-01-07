@@ -10,7 +10,8 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import { config } from "dotenv";
 import { SplunkClient } from "./splunk-client.js";
-import type { SplunkConfig } from "./types.js";
+import { SignalFxClient } from "./signalFx-client.js";
+import type { SplunkConfig, SignalFxConfig } from "./types.js";
 
 // Load environment variables
 config();
@@ -28,8 +29,20 @@ const splunkConfig: SplunkConfig = {
   verifySSL: process.env.VERIFY_SSL?.toLowerCase() !== "false",
 };
 
+// Get SignalFx configuration from environment
+const signalFxConfig: SignalFxConfig | null = process.env.SIGNALFX_ACCESS_TOKEN
+  ? {
+      accessToken: process.env.SIGNALFX_ACCESS_TOKEN,
+      realm: process.env.SIGNALFX_REALM || "us0",
+      baseUrl: process.env.SIGNALFX_BASE_URL,
+    }
+  : null;
+
 // Create Splunk client
 const splunkClient = new SplunkClient(splunkConfig);
+
+// Create SignalFx client if configured
+const signalFxClient = signalFxConfig ? new SignalFxClient(signalFxConfig) : null;
 
 // Define MCP tools
 const tools: Tool[] = [
@@ -153,6 +166,124 @@ const tools: Tool[] = [
     inputSchema: {
       type: "object",
       properties: {},
+    },
+  },
+  // SignalFx Traces Tools
+  {
+    name: "list_services",
+    description:
+      "List all available services in the SignalFx environment with operation counts and error status.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "get_service_operations",
+    description:
+      "Get operations available for a specific service in SignalFx.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        service_name: {
+          type: "string",
+          description: "Name of the service to get operations for",
+        },
+      },
+      required: ["service_name"],
+    },
+  },
+  {
+    name: "search_traces",
+    description:
+      "Search for traces in SignalFx based on service, operation, duration, errors, and other criteria.\n\nArgs:\n    service: Filter by service name (optional)\n    operation: Filter by operation name (optional)\n    min_duration: Minimum duration in milliseconds (optional)\n    max_duration: Maximum duration in milliseconds (optional)\n    has_errors: Filter for traces with errors (optional, true/false)\n    limit: Maximum number of traces to return (default: 100)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        service: {
+          type: "string",
+          description: "Service name to filter by",
+        },
+        operation: {
+          type: "string",
+          description: "Operation name to filter by",
+        },
+        min_duration: {
+          type: "number",
+          description: "Minimum duration in milliseconds",
+        },
+        max_duration: {
+          type: "number",
+          description: "Maximum duration in milliseconds",
+        },
+        has_errors: {
+          type: "boolean",
+          description: "Filter for traces with errors",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of traces to return",
+          default: 100,
+        },
+        offset: {
+          type: "number",
+          description: "Offset for pagination",
+          default: 0,
+        },
+      },
+    },
+  },
+  {
+    name: "get_trace_details",
+    description:
+      "Get detailed information about a specific trace including all spans, tags, and timing information.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        trace_id: {
+          type: "string",
+          description: "The ID of the trace to retrieve",
+        },
+      },
+      required: ["trace_id"],
+    },
+  },
+  {
+    name: "get_latency_metrics",
+    description:
+      "Get latency metrics (p50, p75, p90, p99, mean) for a service or operation.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        service: {
+          type: "string",
+          description: "Service name",
+        },
+        operation: {
+          type: "string",
+          description: "Operation name (optional)",
+        },
+      },
+      required: ["service"],
+    },
+  },
+  {
+    name: "get_error_metrics",
+    description:
+      "Get error metrics including error count, error rate, and error types for a service or operation.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        service: {
+          type: "string",
+          description: "Service name",
+        },
+        operation: {
+          type: "string",
+          description: "Operation name (optional)",
+        },
+      },
+      required: ["service"],
     },
   },
 ];
@@ -350,13 +481,17 @@ mcpServer.registerTool(
     description: tools[9].description,
   },
   async () => {
+    const capabilities = ["splunk"];
+    if (signalFxClient) {
+      capabilities.push("signalfx", "traces");
+    }
     const result = {
       status: "ok",
       server: "splunk-mcp",
       version: VERSION,
       timestamp: new Date().toISOString(),
       protocol: "mcp",
-      capabilities: ["splunk"],
+      capabilities,
     };
     return {
       content: [
@@ -387,11 +522,177 @@ mcpServer.registerTool(
   },
 );
 
+// Register SignalFx tools if client is configured
+if (signalFxClient) {
+  mcpServer.registerTool(
+    "list_services",
+    {
+      description: tools[11].description,
+    },
+    async () => {
+      if (!signalFxClient) {
+        throw new Error("SignalFx client not configured");
+      }
+      const result = await signalFxClient.listServices();
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  mcpServer.registerTool(
+    "get_service_operations",
+    {
+      description: tools[12].description,
+    },
+    async (extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+      if (!signalFxClient) {
+        throw new Error("SignalFx client not configured");
+      }
+      const args =
+        (extra as unknown as { arguments?: Record<string, unknown> }).arguments ||
+        {};
+      const result = await signalFxClient.getServiceOperations(
+        args.service_name as string,
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  mcpServer.registerTool(
+    "search_traces",
+    {
+      description: tools[13].description,
+    },
+    async (extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+      if (!signalFxClient) {
+        throw new Error("SignalFx client not configured");
+      }
+      const args =
+        (extra as unknown as { arguments?: Record<string, unknown> }).arguments ||
+        {};
+      
+      const criteria = {
+        service: args.service as string | undefined,
+        operation: args.operation as string | undefined,
+        minDuration: args.min_duration as number | undefined,
+        maxDuration: args.max_duration as number | undefined,
+        error: args.has_errors as boolean | undefined,
+        limit: (args.limit as number) || 100,
+        offset: (args.offset as number) || 0,
+      };
+      
+      const result = await signalFxClient.searchTraces(criteria);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  mcpServer.registerTool(
+    "get_trace_details",
+    {
+      description: tools[14].description,
+    },
+    async (extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+      if (!signalFxClient) {
+        throw new Error("SignalFx client not configured");
+      }
+      const args =
+        (extra as unknown as { arguments?: Record<string, unknown> }).arguments ||
+        {};
+      const result = await signalFxClient.getTraceDetails(args.trace_id as string);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  mcpServer.registerTool(
+    "get_latency_metrics",
+    {
+      description: tools[15].description,
+    },
+    async (extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+      if (!signalFxClient) {
+        throw new Error("SignalFx client not configured");
+      }
+      const args =
+        (extra as unknown as { arguments?: Record<string, unknown> }).arguments ||
+        {};
+      const result = await signalFxClient.getLatencyMetrics(
+        args.service as string,
+        args.operation as string | undefined,
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  mcpServer.registerTool(
+    "get_error_metrics",
+    {
+      description: tools[16].description,
+    },
+    async (extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+      if (!signalFxClient) {
+        throw new Error("SignalFx client not configured");
+      }
+      const args =
+        (extra as unknown as { arguments?: Record<string, unknown> }).arguments ||
+        {};
+      const result = await signalFxClient.getErrorMetrics(
+        args.service as string,
+        args.operation as string | undefined,
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    },
+  );
+}
+
 // Start the server
 async function main() {
   const transport = new StdioServerTransport();
   await mcpServer.connect(transport);
+  const signalFxStatus = signalFxClient ? "✅ enabled" : "❌ disabled";
   console.error("🚀 Splunk MCP server running on stdio");
+  console.error(`   - Splunk: ✅ enabled`);
+  console.error(`   - SignalFx Traces: ${signalFxStatus}`);
 }
 
 main().catch((error) => {
