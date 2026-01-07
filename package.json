@@ -1,12 +1,12 @@
 {
   "name": "splunk-mcp",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "A Model Context Protocol server for interacting with Splunk Enterprise/Cloud",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "splunk-mcp": "./dist/index.js"
+    "splunk-mcp": "dist/index.js"
   },
   "repository": {
     "type": "git",
