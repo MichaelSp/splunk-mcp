@@ -1,17 +1,28 @@
 # Splunk MCP (Model Context Protocol) Server
 
-A TypeScript-based Model Context Protocol server for interacting with Splunk Enterprise/Cloud. This tool provides a set of capabilities for searching Splunk data, managing KV stores, and accessing Splunk resources through the MCP protocol.
+A TypeScript-based Model Context Protocol server for interacting with Splunk Enterprise/Cloud and SignalFx. This tool provides a comprehensive set of capabilities for searching Splunk data, managing KV stores, and accessing distributed traces through SignalFx APM.
 
 ## Features
 
+### Splunk Integration
 - **Splunk Search**: Execute Splunk searches with natural language queries
 - **Index Management**: List and inspect Splunk indexes
 - **User Management**: View and manage Splunk users
 - **KV Store Operations**: List and manage KV store collections
+
+### SignalFx APM & Traces (New!)
+- **Service Discovery**: List all services in your environment
+- **Trace Search**: Search for traces by service, operation, duration, errors
+- **Trace Analysis**: Get detailed trace information with spans and timing
+- **Performance Metrics**: Retrieve latency metrics (p50, p75, p90, p99)
+- **Error Tracking**: Monitor error rates and error types by service/operation
+
+### Technical Features
 - **Async Support**: Built with async/await patterns for better performance
 - **Detailed Logging**: Comprehensive logging with emoji indicators for better visibility
 - **SSL Configuration**: Flexible SSL verification options for different security requirements
 - **TypeScript**: Fully typed implementation for better developer experience
+- **High Test Coverage**: 88%+ test coverage with comprehensive test suite
 
 ## Available MCP Tools
 
@@ -19,7 +30,7 @@ The following tools are available via the MCP interface:
 
 ### Tools Management
 - **ping**
-  - Simple ping endpoint to verify MCP server is alive
+  - Simple ping endpoint to verify MCP server is alive and check enabled capabilities
 
 ### Health Check
 - **health_check** / **health**
@@ -55,6 +66,52 @@ The following tools are available via the MCP interface:
 - **list_kvstore_collections**
   - Lists all KV store collections with metadata including app, fields, and accelerated fields
 
+### SignalFx Traces (New!)
+
+#### Service Management
+- **list_services**
+  - Lists all available services in the SignalFx environment
+  - Returns: service name, operation count, error status, last seen timestamp
+
+- **get_service_operations**
+  - Gets operations available for a specific service
+  - Parameters:
+    - service_name (string): Name of the service
+
+#### Trace Operations
+- **search_traces**
+  - Search for traces based on multiple criteria
+  - Parameters:
+    - service (string, optional): Filter by service name
+    - operation (string, optional): Filter by operation name
+    - min_duration (number, optional): Minimum duration in milliseconds
+    - max_duration (number, optional): Maximum duration in milliseconds
+    - has_errors (boolean, optional): Filter for traces with errors
+    - limit (number, optional): Maximum number of traces to return (default: 100)
+    - offset (number, optional): Offset for pagination (default: 0)
+  - Returns: Array of matching traces with trace ID, spans, duration, services
+
+- **get_trace_details**
+  - Get detailed information about a specific trace
+  - Parameters:
+    - trace_id (string): The ID of the trace to retrieve
+  - Returns: Complete trace with all spans, tags, logs, timing information, and parent-child relationships
+
+#### Metrics & Analytics
+- **get_latency_metrics**
+  - Get latency percentiles for a service or operation
+  - Parameters:
+    - service (string): Service name
+    - operation (string, optional): Operation name
+  - Returns: p50, p75, p90, p99, mean, min, max latencies and sample count
+
+- **get_error_metrics**
+  - Get error statistics for a service or operation
+  - Parameters:
+    - service (string): Service name
+    - operation (string, optional): Operation name
+  - Returns: error count, total count, error rate, breakdown by error type
+
 ## Usage with MCP Clients
 
 ### Claude Desktop
@@ -63,6 +120,8 @@ Add the server to your Claude Desktop configuration file:
 
 **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
+
+#### Splunk Only Configuration
 
 ```json
 {
@@ -83,6 +142,29 @@ Add the server to your Claude Desktop configuration file:
 }
 ```
 
+#### Splunk + SignalFx Configuration
+
+```json
+{
+  "mcpServers": {
+    "splunk": {
+      "command": "bunx",
+      "args": ["splunk-mcp"],
+      "env": {
+        "SPLUNK_HOST": "your_splunk_host",
+        "SPLUNK_PORT": "8089",
+        "SPLUNK_USERNAME": "your_username",
+        "SPLUNK_PASSWORD": "your_password",
+        "SPLUNK_SCHEME": "https",
+        "VERIFY_SSL": "true",
+        "SIGNALFX_ACCESS_TOKEN": "your_signalfx_token",
+        "SIGNALFX_REALM": "us0"
+      }
+    }
+  }
+}
+```
+
 Or using npx:
 
 ```json
@@ -97,7 +179,9 @@ Or using npx:
         "SPLUNK_USERNAME": "your_username",
         "SPLUNK_PASSWORD": "your_password",
         "SPLUNK_SCHEME": "https",
-        "VERIFY_SSL": "true"
+        "VERIFY_SSL": "true",
+        "SIGNALFX_ACCESS_TOKEN": "your_signalfx_token",
+        "SIGNALFX_REALM": "us0"
       }
     }
   }
@@ -116,14 +200,41 @@ And provide the required environment variables through your client's configurati
 
 ## Example Queries
 
-Once connected, you can use natural language to interact with Splunk:
+Once connected, you can use natural language to interact with Splunk and SignalFx:
 
+### Splunk Examples
 - "Search for errors in the last hour"
 - "List all available indexes"
 - "Show me the current user information"
 - "Get information about the 'main' index"
 - "List all saved searches"
 - "Show me all KV store collections"
+
+### SignalFx Traces Examples
+- "List all services in SignalFx"
+- "Show me operations for the auth-service"
+- "Search for traces with errors in the payment-service"
+- "Find slow traces over 5 seconds"
+- "Get details for trace ID abc123"
+- "Show latency metrics for the api-gateway service"
+- "What's the error rate for the checkout operation?"
+- "Find traces for the user-service that took between 100ms and 1000ms"
+
+## Environment Variables
+
+### Splunk Configuration (Required)
+- `SPLUNK_HOST`: Splunk server hostname
+- `SPLUNK_PORT`: Splunk management port (default: 8089)
+- `SPLUNK_USERNAME`: Splunk username (if not using token auth)
+- `SPLUNK_PASSWORD`: Splunk password (if not using token auth)
+- `SPLUNK_TOKEN`: Splunk authentication token (alternative to username/password)
+- `SPLUNK_SCHEME`: Connection scheme (http or https, default: https)
+- `VERIFY_SSL`: SSL certificate verification (true/false, default: true)
+
+### SignalFx Configuration (Optional)
+- `SIGNALFX_ACCESS_TOKEN`: SignalFx API access token (required to enable SignalFx features)
+- `SIGNALFX_REALM`: SignalFx realm (e.g., us0, us1, eu0, default: us0)
+- `SIGNALFX_BASE_URL`: Custom SignalFx API base URL (optional, for custom deployments)
 
 ## Error Handling
 
@@ -134,7 +245,9 @@ The MCP implementation includes consistent error handling:
 - Resource not found
 - Invalid input validation
 - Unexpected server errors
-- Connection issues with Splunk server
+- Connection issues with Splunk/SignalFx servers
+- Missing required parameters
+- Authentication failures
 
 All error responses include a detailed message explaining the error.
 
