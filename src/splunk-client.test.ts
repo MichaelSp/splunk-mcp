@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { type AxiosInstance } from "axios";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SplunkClient } from "./splunk-client.js";
 import type { SplunkConfig } from "./types.js";
@@ -31,7 +31,7 @@ describe("SplunkClient", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     // Suppress console logs during tests
     vi.spyOn(console, "log").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -43,7 +43,9 @@ describe("SplunkClient", () => {
     };
 
     // Mock axios.create to return our mock instance
-    vi.mocked(axios.create).mockReturnValue(mockAxiosInstance as any);
+    vi.mocked(axios.create).mockReturnValue(
+      mockAxiosInstance as unknown as AxiosInstance,
+    );
 
     client = new SplunkClient(mockConfig);
   });
@@ -55,9 +57,7 @@ describe("SplunkClient", () => {
       };
       const mockResultsResponse = {
         data: {
-          results: [
-            { _time: "2024-01-01", host: "server1", message: "test" },
-          ],
+          results: [{ _time: "2024-01-01", host: "server1", message: "test" }],
         },
       };
 
@@ -119,9 +119,7 @@ describe("SplunkClient", () => {
     });
 
     it("should handle search errors", async () => {
-      mockAxiosInstance.post.mockRejectedValueOnce(
-        new Error("Network error"),
-      );
+      mockAxiosInstance.post.mockRejectedValueOnce(new Error("Network error"));
 
       await expect(client.searchSplunk("index=main")).rejects.toThrow(
         "Network error",
@@ -654,7 +652,9 @@ describe("SplunkClient", () => {
       ];
 
       // Mock listIndexes
-      vi.spyOn(client, "listIndexes").mockResolvedValueOnce(mockIndexesResponse);
+      vi.spyOn(client, "listIndexes").mockResolvedValueOnce(
+        mockIndexesResponse,
+      );
 
       // Mock searchSplunk
       vi.spyOn(client, "searchSplunk").mockResolvedValueOnce(mockSearchResults);

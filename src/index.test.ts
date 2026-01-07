@@ -10,10 +10,43 @@ vi.mock("@modelcontextprotocol/sdk/server/mcp.js");
 vi.mock("@modelcontextprotocol/sdk/server/stdio.js");
 vi.mock("./splunk-client.js");
 
+// Type definitions for test mocks
+interface MockServer {
+  setRequestHandler: ReturnType<typeof vi.fn>;
+  connect: ReturnType<typeof vi.fn>;
+}
+
+interface MockSplunkClient {
+  searchSplunk: ReturnType<typeof vi.fn>;
+  listIndexes: ReturnType<typeof vi.fn>;
+  getIndexInfo: ReturnType<typeof vi.fn>;
+  listSavedSearches: ReturnType<typeof vi.fn>;
+  getCurrentUser: ReturnType<typeof vi.fn>;
+  listUsers: ReturnType<typeof vi.fn>;
+  listKVStoreCollections: ReturnType<typeof vi.fn>;
+  healthCheck: ReturnType<typeof vi.fn>;
+  getIndexesAndSourcetypes: ReturnType<typeof vi.fn>;
+}
+
+interface ToolRequest {
+  params: {
+    name: string;
+    arguments?: Record<string, unknown>;
+  };
+}
+
+interface ToolResponse {
+  content: Array<{
+    type: string;
+    text: string;
+  }>;
+  isError?: boolean;
+}
+
 describe("MCP Server Tool Handlers", () => {
-  let mockServer: any;
-  let mockSplunkClient: any;
-  let toolHandlers: Map<string, Function>;
+  let mockServer: MockServer;
+  let mockSplunkClient: MockSplunkClient;
+  let toolHandlers: Map<string, (...args: never[]) => unknown>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -21,18 +54,22 @@ describe("MCP Server Tool Handlers", () => {
 
     // Mock McpServer implementation
     mockServer = {
-      setRequestHandler: vi.fn((schema: any, handler: Function) => {
-        if (schema === ListToolsRequestSchema) {
-          toolHandlers.set("listTools", handler);
-        } else if (schema === CallToolRequestSchema) {
-          toolHandlers.set("callTool", handler);
-        }
-      }),
+      setRequestHandler: vi.fn(
+        (schema: unknown, handler: (...args: never[]) => unknown) => {
+          if (schema === ListToolsRequestSchema) {
+            toolHandlers.set("listTools", handler);
+          } else if (schema === CallToolRequestSchema) {
+            toolHandlers.set("callTool", handler);
+          }
+        },
+      ),
       connect: vi.fn(),
     };
 
     // Use vi.mocked to properly mock the McpServer constructor
-    vi.mocked(McpServer).mockImplementation(() => mockServer as any);
+    vi.mocked(McpServer).mockImplementation(
+      () => mockServer as unknown as McpServer,
+    );
 
     // Mock SplunkClient
     mockSplunkClient = {
@@ -96,7 +133,7 @@ describe("MCP Server Tool Handlers", () => {
       mockSplunkClient.searchSplunk.mockResolvedValue(mockResults);
 
       // Create a mock handler
-      const handler = async (request: any) => {
+      const handler = async (request: ToolRequest): Promise<ToolResponse> => {
         const { name, arguments: args } = request.params;
         if (name === "search_splunk" && args) {
           const results = await mockSplunkClient.searchSplunk(
@@ -142,7 +179,7 @@ describe("MCP Server Tool Handlers", () => {
     it("should handle search_splunk with default parameters", async () => {
       mockSplunkClient.searchSplunk.mockResolvedValue([]);
 
-      const handler = async (request: any) => {
+      const handler = async (request: ToolRequest): Promise<ToolResponse> => {
         const { name, arguments: args } = request.params;
         if (name === "search_splunk" && args) {
           const results = await mockSplunkClient.searchSplunk(
@@ -181,7 +218,7 @@ describe("MCP Server Tool Handlers", () => {
     });
 
     it("should handle missing arguments error", async () => {
-      const handler = async (request: any) => {
+      const handler = async (request: ToolRequest): Promise<ToolResponse> => {
         const { name, arguments: args } = request.params;
         try {
           if (name === "search_splunk") {
@@ -189,12 +226,14 @@ describe("MCP Server Tool Handlers", () => {
             return { content: [] };
           }
           throw new Error(`Unknown tool: ${name}`);
-        } catch (error: any) {
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
           return {
             content: [
               {
                 type: "text",
-                text: `Error: ${error.message}`,
+                text: `Error: ${errorMessage}`,
               },
             ],
             isError: true,
@@ -205,7 +244,7 @@ describe("MCP Server Tool Handlers", () => {
       const result = await handler({
         params: {
           name: "search_splunk",
-          arguments: null,
+          arguments: undefined,
         },
       });
 
@@ -219,7 +258,7 @@ describe("MCP Server Tool Handlers", () => {
       const mockIndexes = { indexes: ["main", "security", "_audit"] };
       mockSplunkClient.listIndexes.mockResolvedValue(mockIndexes);
 
-      const handler = async (request: any) => {
+      const handler = async (request: ToolRequest): Promise<ToolResponse> => {
         const { name } = request.params;
         if (name === "list_indexes") {
           const result = await mockSplunkClient.listIndexes();
@@ -260,7 +299,7 @@ describe("MCP Server Tool Handlers", () => {
 
       mockSplunkClient.getIndexInfo.mockResolvedValue(mockIndexInfo);
 
-      const handler = async (request: any) => {
+      const handler = async (request: ToolRequest): Promise<ToolResponse> => {
         const { name, arguments: args } = request.params;
         if (name === "get_index_info" && args) {
           const result = await mockSplunkClient.getIndexInfo(args.index_name);
@@ -292,7 +331,7 @@ describe("MCP Server Tool Handlers", () => {
 
   describe("CallTool Handler - ping", () => {
     it("should handle ping tool successfully", async () => {
-      const handler = async (request: any) => {
+      const handler = async (request: ToolRequest): Promise<ToolResponse> => {
         const { name } = request.params;
         if (name === "ping") {
           const result = {
@@ -348,7 +387,7 @@ describe("MCP Server Tool Handlers", () => {
 
       mockSplunkClient.healthCheck.mockResolvedValue(mockHealth);
 
-      const handler = async (request: any) => {
+      const handler = async (request: ToolRequest): Promise<ToolResponse> => {
         const { name } = request.params;
         if (name === "health_check" || name === "health") {
           const result = await mockSplunkClient.healthCheck();
@@ -378,7 +417,7 @@ describe("MCP Server Tool Handlers", () => {
       const mockHealth = { status: "healthy" };
       mockSplunkClient.healthCheck.mockResolvedValue(mockHealth);
 
-      const handler = async (request: any) => {
+      const handler = async (request: ToolRequest): Promise<ToolResponse> => {
         const { name } = request.params;
         if (name === "health_check" || name === "health") {
           const result = await mockSplunkClient.healthCheck();
@@ -419,7 +458,7 @@ describe("MCP Server Tool Handlers", () => {
 
       mockSplunkClient.getCurrentUser.mockResolvedValue(mockUser);
 
-      const handler = async (request: any) => {
+      const handler = async (request: ToolRequest): Promise<ToolResponse> => {
         const { name } = request.params;
         if (name === "current_user") {
           const result = await mockSplunkClient.getCurrentUser();
@@ -462,7 +501,7 @@ describe("MCP Server Tool Handlers", () => {
 
       mockSplunkClient.listUsers.mockResolvedValue(mockUsers);
 
-      const handler = async (request: any) => {
+      const handler = async (request: ToolRequest): Promise<ToolResponse> => {
         const { name } = request.params;
         if (name === "list_users") {
           const result = await mockSplunkClient.listUsers();
@@ -491,16 +530,18 @@ describe("MCP Server Tool Handlers", () => {
 
   describe("CallTool Handler - error handling", () => {
     it("should handle unknown tool error", async () => {
-      const handler = async (request: any) => {
+      const handler = async (request: ToolRequest): Promise<ToolResponse> => {
         const { name } = request.params;
         try {
           throw new Error(`Unknown tool: ${name}`);
-        } catch (error: any) {
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
           return {
             content: [
               {
                 type: "text",
-                text: `Error: ${error.message}`,
+                text: `Error: ${errorMessage}`,
               },
             ],
             isError: true,
@@ -515,7 +556,9 @@ describe("MCP Server Tool Handlers", () => {
       });
 
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toBe("Error: Unknown tool: nonexistent_tool");
+      expect(result.content[0].text).toBe(
+        "Error: Unknown tool: nonexistent_tool",
+      );
     });
 
     it("should handle Splunk client errors", async () => {
@@ -523,7 +566,7 @@ describe("MCP Server Tool Handlers", () => {
         new Error("Connection failed"),
       );
 
-      const handler = async (request: any) => {
+      const handler = async (request: ToolRequest): Promise<ToolResponse> => {
         const { name } = request.params;
         try {
           if (name === "list_indexes") {
@@ -538,12 +581,14 @@ describe("MCP Server Tool Handlers", () => {
             };
           }
           throw new Error(`Unknown tool: ${name}`);
-        } catch (error: any) {
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
           return {
             content: [
               {
                 type: "text",
-                text: `Error: ${error.message}`,
+                text: `Error: ${errorMessage}`,
               },
             ],
             isError: true,

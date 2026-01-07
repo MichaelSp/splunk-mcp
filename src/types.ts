@@ -9,7 +9,7 @@ export interface SplunkConfig {
 }
 
 export interface SplunkSearchResult {
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface SplunkIndex {
@@ -71,7 +71,7 @@ export interface ToolDefinition {
   description: string;
   parameters: {
     type: string;
-    properties: Record<string, any>;
+    properties: Record<string, unknown>;
     required?: string[];
   };
 }

@@ -1,5 +1,5 @@
+import https from "node:https";
 import axios, { type AxiosInstance } from "axios";
-import https from "https";
 import type {
   IndexesAndSourcetypes,
   KVStoreCollection,
@@ -10,6 +10,25 @@ import type {
   SplunkSearchResult,
   SplunkUser,
 } from "./types.js";
+
+interface SplunkConnectionInfo {
+  host: string;
+  port: number;
+  scheme: string;
+  username: string;
+  ssl_verify: boolean;
+}
+
+interface SplunkIndexEntry {
+  name: string;
+  content?: {
+    totalEventCount?: number | string;
+    currentDBSizeMB?: number | string;
+    maxTotalDataSizeMB?: number | string;
+    minTime?: number | string;
+    maxTime?: number | string;
+  };
+}
 
 export class SplunkClient {
   private client: AxiosInstance;
@@ -30,7 +49,7 @@ export class SplunkClient {
     };
 
     if (config.token) {
-      headers["Authorization"] = `Bearer ${config.token}`;
+      headers.Authorization = `Bearer ${config.token}`;
     }
 
     this.client = axios.create({
@@ -106,8 +125,9 @@ export class SplunkClient {
       );
 
       return resultsResponse.data.results || [];
-    } catch (error: any) {
-      this.log("❌", `Search failed: ${error.message}`, "error");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log("❌", `Search failed: ${message}`, "error");
       throw error;
     }
   }
@@ -126,11 +146,14 @@ export class SplunkClient {
         params: { output_mode: "json" },
       });
 
-      const indexes = response.data.entry.map((entry: any) => entry.name);
+      const indexes = response.data.entry.map(
+        (entry: SplunkIndexEntry) => entry.name,
+      );
       this.log("📊", `Found ${indexes.length} indexes`, "info");
       return { indexes };
-    } catch (error: any) {
-      this.log("❌", `Failed to list indexes: ${error.message}`, "error");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log("❌", `Failed to list indexes: ${message}`, "error");
       throw error;
     }
   }
@@ -157,8 +180,9 @@ export class SplunkClient {
         minTime: String(content.minTime || "0"),
         maxTime: String(content.maxTime || "0"),
       };
-    } catch (error: any) {
-      this.log("❌", `Failed to get index info: ${error.message}`, "error");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log("❌", `Failed to get index info: ${message}`, "error");
       throw error;
     }
   }
@@ -177,22 +201,17 @@ export class SplunkClient {
             description: entry.content?.description || "",
             search: entry.content?.search || "",
           });
-        } catch (error: any) {
-          this.log(
-            "⚠️",
-            `Error processing saved search: ${error.message}`,
-            "info",
-          );
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          this.log("⚠️", `Error processing saved search: ${message}`, "info");
         }
       }
 
       return savedSearches;
-    } catch (error: any) {
-      this.log(
-        "❌",
-        `Failed to list saved searches: ${error.message}`,
-        "error",
-      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log("❌", `Failed to list saved searches: ${message}`, "error");
       throw error;
     }
   }
@@ -224,10 +243,11 @@ export class SplunkClient {
             );
           }
         }
-      } catch (error: any) {
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
         this.log(
           "⚠️",
-          `Could not get username from current-context: ${error.message}`,
+          `Could not get username from current-context: ${message}`,
           "info",
         );
       }
@@ -269,8 +289,9 @@ export class SplunkClient {
         default_app: content.defaultApp || "search",
         type: content.type || "user",
       };
-    } catch (error: any) {
-      this.log("❌", `Error getting current user: ${error.message}`, "error");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log("❌", `Error getting current user: ${message}`, "error");
       throw error;
     }
   }
@@ -309,10 +330,12 @@ export class SplunkClient {
           });
 
           this.log("✅", `Successfully processed user: ${entry.name}`, "debug");
-        } catch (error: any) {
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
           this.log(
             "⚠️",
-            `Error processing user ${entry.name}: ${error.message}`,
+            `Error processing user ${entry.name}: ${message}`,
             "info",
           );
         }
@@ -320,8 +343,9 @@ export class SplunkClient {
 
       this.log("✅", `Found ${users.length} users`, "info");
       return users;
-    } catch (error: any) {
-      this.log("❌", `Error listing users: ${error.message}`, "error");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log("❌", `Error listing users: ${message}`, "error");
       throw error;
     }
   }
@@ -350,12 +374,10 @@ export class SplunkClient {
               if (parsed.ns && parsed.count !== undefined) {
                 collectionStats[parsed.ns] = parsed.count;
               }
-            } catch (error: any) {
-              this.log(
-                "⚠️",
-                `Error parsing KV store stat: ${error.message}`,
-                "debug",
-              );
+            } catch (error) {
+              const message =
+                error instanceof Error ? error.message : String(error);
+              this.log("⚠️", `Error parsing KV store stat: ${message}`, "debug");
             }
           }
           this.log(
@@ -364,10 +386,11 @@ export class SplunkClient {
             "debug",
           );
         }
-      } catch (error: any) {
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
         this.log(
           "⚠️",
-          `Error retrieving KV store collection stats: ${error.message}`,
+          `Error retrieving KV store collection stats: ${message}`,
           "info",
         );
       }
@@ -411,10 +434,12 @@ export class SplunkClient {
             `Added collection: ${collectionName} from app: ${app}`,
             "debug",
           );
-        } catch (error: any) {
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
           this.log(
             "⚠️",
-            `Error processing collection entry: ${error.message}`,
+            `Error processing collection entry: ${message}`,
             "info",
           );
         }
@@ -426,19 +451,16 @@ export class SplunkClient {
         "info",
       );
       return collections;
-    } catch (error: any) {
-      this.log(
-        "❌",
-        `Error listing KV store collections: ${error.message}`,
-        "error",
-      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log("❌", `Error listing KV store collections: ${message}`, "error");
       throw error;
     }
   }
 
   async healthCheck(): Promise<{
     status: string;
-    connection: any;
+    connection: SplunkConnectionInfo;
     apps_count: number;
     apps: SplunkApp[];
   }> {
@@ -457,10 +479,12 @@ export class SplunkClient {
             label: entry.content?.label || entry.name,
             version: entry.content?.version || "unknown",
           });
-        } catch (error: any) {
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
           this.log(
             "⚠️",
-            `Error getting info for app ${entry.name}: ${error.message}`,
+            `Error getting info for app ${entry.name}: ${message}`,
             "info",
           );
         }
@@ -485,8 +509,9 @@ export class SplunkClient {
         "info",
       );
       return result;
-    } catch (error: any) {
-      this.log("❌", `Health check failed: ${error.message}`, "error");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log("❌", `Health check failed: ${message}`, "error");
       throw error;
     }
   }
@@ -520,9 +545,11 @@ export class SplunkClient {
         Array<{ sourcetype: string; count: string }>
       > = {};
       for (const result of results) {
-        const index = result.index || "";
-        const sourcetype = result.sourcetype || "";
-        const count = result.count || "0";
+        const index = String((result as Record<string, unknown>).index || "");
+        const sourcetype = String(
+          (result as Record<string, unknown>).sourcetype || "",
+        );
+        const count = String((result as Record<string, unknown>).count || "0");
 
         if (!sourcetypesByIndex[index]) {
           sourcetypesByIndex[index] = [];
@@ -530,7 +557,7 @@ export class SplunkClient {
 
         sourcetypesByIndex[index].push({
           sourcetype,
-          count: String(count),
+          count,
         });
       }
 
@@ -549,10 +576,11 @@ export class SplunkClient {
 
       this.log("✅", "Successfully retrieved indexes and sourcetypes", "info");
       return response;
-    } catch (error: any) {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       this.log(
         "❌",
-        `Error getting indexes and sourcetypes: ${error.message}`,
+        `Error getting indexes and sourcetypes: ${message}`,
         "error",
       );
       throw error;
