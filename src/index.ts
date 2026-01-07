@@ -1,11 +1,9 @@
 #!/usr/bin/env node
 
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  type Tool,
+  type Tool
 } from "@modelcontextprotocol/sdk/types.js";
 import { config } from "dotenv";
 import { SplunkClient } from "./splunk-client.js";
@@ -156,8 +154,8 @@ const tools: Tool[] = [
   },
 ];
 
-// Create MCP server
-const server = new Server(
+// Create MCP server using the high-level McpServer API
+const mcpServer = new McpServer(
   {
     name: "splunk-mcp",
     version: VERSION,
@@ -169,175 +167,183 @@ const server = new Server(
   },
 );
 
-// Register tool handlers
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools,
-  };
-});
-
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-
-  try {
-    switch (name) {
-      case "search_splunk": {
-        if (!args) throw new Error("Missing arguments");
-        const results = await splunkClient.searchSplunk(
-          args.search_query as string,
-          (args.earliest_time as string) || "-24h",
-          (args.latest_time as string) || "now",
-          (args.max_results as number) || 100,
-        );
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(results, null, 2),
-            },
-          ],
-        };
-      }
-
-      case "list_indexes": {
-        const result = await splunkClient.listIndexes();
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case "get_index_info": {
-        if (!args) throw new Error("Missing arguments");
-        const result = await splunkClient.getIndexInfo(
-          args.index_name as string,
-        );
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case "list_saved_searches": {
-        const result = await splunkClient.listSavedSearches();
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case "current_user": {
-        const result = await splunkClient.getCurrentUser();
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case "list_users": {
-        const result = await splunkClient.listUsers();
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case "list_kvstore_collections": {
-        const result = await splunkClient.listKVStoreCollections();
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case "health_check":
-      case "health": {
-        const result = await splunkClient.healthCheck();
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case "get_indexes_and_sourcetypes": {
-        const result = await splunkClient.getIndexesAndSourcetypes();
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case "ping": {
-        const result = {
-          status: "ok",
-          server: "splunk-mcp",
-          version: VERSION,
-          timestamp: new Date().toISOString(),
-          protocol: "mcp",
-          capabilities: ["splunk"],
-        };
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      default:
-        throw new Error(`Unknown tool: ${name}`);
-    }
-  } catch (error: any) {
+// Register tools using the McpServer API
+mcpServer.registerTool(
+  "search_splunk",
+  {
+    description: tools[0].description,
+  },
+  async (extra: any) => {
+    const args = extra.arguments || {};
+    const results = await splunkClient.searchSplunk(
+      args.search_query as string,
+      (args.earliest_time as string) || "-24h",
+      (args.latest_time as string) || "now",
+      (args.max_results as number) || 100,
+    );
     return {
       content: [
         {
           type: "text",
-          text: `Error: ${error.message}`,
+          text: JSON.stringify(results, null, 2),
         },
       ],
-      isError: true,
     };
-  }
+  },
+);
+
+mcpServer.registerTool("list_indexes", {
+  description: tools[1].description,
+}, async () => {
+  const result = await splunkClient.listIndexes();
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(result, null, 2),
+      },
+    ],
+  };
+});
+
+mcpServer.registerTool("get_index_info", {
+  description: tools[2].description,
+}, async (extra: any) => {
+  const args = extra.arguments || {};
+  const result = await splunkClient.getIndexInfo(args.index_name as string);
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(result, null, 2),
+      },
+    ],
+  };
+});
+
+mcpServer.registerTool("list_saved_searches", {
+  description: tools[3].description,
+}, async () => {
+  const result = await splunkClient.listSavedSearches();
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(result, null, 2),
+      },
+    ],
+  };
+});
+
+mcpServer.registerTool("current_user", {
+  description: tools[4].description,
+}, async () => {
+  const result = await splunkClient.getCurrentUser();
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(result, null, 2),
+      },
+    ],
+  };
+});
+
+mcpServer.registerTool("list_users", {
+  description: tools[5].description,
+}, async () => {
+  const result = await splunkClient.listUsers();
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(result, null, 2),
+      },
+    ],
+  };
+});
+
+mcpServer.registerTool("list_kvstore_collections", {
+  description: tools[6].description,
+}, async () => {
+  const result = await splunkClient.listKVStoreCollections();
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(result, null, 2),
+      },
+    ],
+  };
+});
+
+mcpServer.registerTool("health_check", {
+  description: tools[7].description,
+}, async () => {
+  const result = await splunkClient.healthCheck();
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(result, null, 2),
+      },
+    ],
+  };
+});
+
+mcpServer.registerTool("get_indexes_and_sourcetypes", {
+  description: tools[8].description,
+}, async () => {
+  const result = await splunkClient.getIndexesAndSourcetypes();
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(result, null, 2),
+      },
+    ],
+  };
+});
+
+mcpServer.registerTool("ping", {
+  description: tools[9].description,
+}, async () => {
+  const result = {
+    status: "ok",
+    server: "splunk-mcp",
+    version: VERSION,
+    timestamp: new Date().toISOString(),
+    protocol: "mcp",
+    capabilities: ["splunk"],
+  };
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(result, null, 2),
+      },
+    ],
+  };
+});
+
+mcpServer.registerTool("health", {
+  description: tools[10].description,
+}, async () => {
+  const result = await splunkClient.healthCheck();
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(result, null, 2),
+      },
+    ],
+  };
 });
 
 // Start the server
 async function main() {
   const transport = new StdioServerTransport();
-  await server.connect(transport);
+  await mcpServer.connect(transport);
   console.error("🚀 Splunk MCP server running on stdio");
 }
 

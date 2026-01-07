@@ -55,6 +55,89 @@ The following tools are available via the MCP interface:
 - **list_kvstore_collections**
   - Lists all KV store collections with metadata including app, fields, and accelerated fields
 
+## Usage with MCP Clients
+
+### Claude Desktop
+
+Add the server to your Claude Desktop configuration file:
+
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "splunk": {
+      "command": "bunx",
+      "args": ["splunk-mcp"],
+      "env": {
+        "SPLUNK_HOST": "your_splunk_host",
+        "SPLUNK_PORT": "8089",
+        "SPLUNK_USERNAME": "your_username",
+        "SPLUNK_PASSWORD": "your_password",
+        "SPLUNK_SCHEME": "https",
+        "VERIFY_SSL": "true"
+      }
+    }
+  }
+}
+```
+
+Or using npx:
+
+```json
+{
+  "mcpServers": {
+    "splunk": {
+      "command": "npx",
+      "args": ["-y", "splunk-mcp"],
+      "env": {
+        "SPLUNK_HOST": "your_splunk_host",
+        "SPLUNK_PORT": "8089",
+        "SPLUNK_USERNAME": "your_username",
+        "SPLUNK_PASSWORD": "your_password",
+        "SPLUNK_SCHEME": "https",
+        "VERIFY_SSL": "true"
+      }
+    }
+  }
+}
+```
+
+### Cline / Other MCP Clients
+
+Configure the MCP server in your client's settings with the command:
+
+```bash
+bunx splunk-mcp
+```
+
+And provide the required environment variables through your client's configuration.
+
+## Example Queries
+
+Once connected, you can use natural language to interact with Splunk:
+
+- "Search for errors in the last hour"
+- "List all available indexes"
+- "Show me the current user information"
+- "Get information about the 'main' index"
+- "List all saved searches"
+- "Show me all KV store collections"
+
+## Error Handling
+
+The MCP implementation includes consistent error handling:
+
+- Invalid search commands or malformed requests
+- Insufficient permissions
+- Resource not found
+- Invalid input validation
+- Unexpected server errors
+- Connection issues with Splunk server
+
+All error responses include a detailed message explaining the error.
+
 ## Installation
 
 ### Prerequisites
@@ -154,88 +237,6 @@ The tool provides flexible SSL verification options:
    - SSL certificate verification disabled
    - Useful for testing or self-signed certificates
 
-## Usage with MCP Clients
-
-### Claude Desktop
-
-Add the server to your Claude Desktop configuration file:
-
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "splunk": {
-      "command": "bunx",
-      "args": ["splunk-mcp"],
-      "env": {
-        "SPLUNK_HOST": "your_splunk_host",
-        "SPLUNK_PORT": "8089",
-        "SPLUNK_USERNAME": "your_username",
-        "SPLUNK_PASSWORD": "your_password",
-        "SPLUNK_SCHEME": "https",
-        "VERIFY_SSL": "true"
-      }
-    }
-  }
-}
-```
-
-Or using npx:
-
-```json
-{
-  "mcpServers": {
-    "splunk": {
-      "command": "npx",
-      "args": ["-y", "splunk-mcp"],
-      "env": {
-        "SPLUNK_HOST": "your_splunk_host",
-        "SPLUNK_PORT": "8089",
-        "SPLUNK_USERNAME": "your_username",
-        "SPLUNK_PASSWORD": "your_password",
-        "SPLUNK_SCHEME": "https",
-        "VERIFY_SSL": "true"
-      }
-    }
-  }
-}
-```
-
-### Cline / Other MCP Clients
-
-Configure the MCP server in your client's settings with the command:
-
-```bash
-bunx splunk-mcp
-```
-
-And provide the required environment variables through your client's configuration.
-
-## Example Queries
-
-Once connected, you can use natural language to interact with Splunk:
-
-- "Search for errors in the last hour"
-- "List all available indexes"
-- "Show me the current user information"
-- "Get information about the 'main' index"
-- "List all saved searches"
-- "Show me all KV store collections"
-
-## Error Handling
-
-The MCP implementation includes consistent error handling:
-
-- Invalid search commands or malformed requests
-- Insufficient permissions
-- Resource not found
-- Invalid input validation
-- Unexpected server errors
-- Connection issues with Splunk server
-
-All error responses include a detailed message explaining the error.
 
 ## Development
 
