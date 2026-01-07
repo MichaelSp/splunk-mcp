@@ -9,9 +9,9 @@ import type {
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import { config } from "dotenv";
-import { SplunkClient } from "./splunk-client.js";
 import { SignalFxClient } from "./signalFx-client.js";
-import type { SplunkConfig, SignalFxConfig } from "./types.js";
+import { SplunkClient } from "./splunk-client.js";
+import type { SignalFxConfig, SplunkConfig } from "./types.js";
 
 // Load environment variables
 config();
