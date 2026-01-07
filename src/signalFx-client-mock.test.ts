@@ -2,8 +2,8 @@
  * Mock-based integration tests for SignalFx client
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import axios from "axios";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SignalFxClient } from "./signalFx-client";
 import type { SignalFxConfig } from "./signalFx-types";
 
@@ -79,9 +79,7 @@ describe("SignalFxClient with Mocked API", () => {
     });
 
     it("should handle API errors", async () => {
-      mockAxiosInstance.get.mockRejectedValueOnce(
-        new Error("Network error"),
-      );
+      mockAxiosInstance.get.mockRejectedValueOnce(new Error("Network error"));
 
       await expect(client.listServices()).rejects.toThrow("Network error");
     });

@@ -20,7 +20,7 @@ describe("SignalFx Integration", () => {
     it("should support SignalFx configuration from environment", () => {
       process.env.SIGNALFX_ACCESS_TOKEN = "test-token";
       process.env.SIGNALFX_REALM = "eu0";
-      
+
       expect(process.env.SIGNALFX_ACCESS_TOKEN).toBe("test-token");
       expect(process.env.SIGNALFX_REALM).toBe("eu0");
     });
@@ -28,20 +28,22 @@ describe("SignalFx Integration", () => {
     it("should use default realm if not specified", () => {
       process.env.SIGNALFX_ACCESS_TOKEN = "test-token";
       const realm = process.env.SIGNALFX_REALM || "us0";
-      
+
       expect(realm).toBe("us0");
     });
 
     it("should support custom base URL", () => {
       process.env.SIGNALFX_ACCESS_TOKEN = "test-token";
       process.env.SIGNALFX_BASE_URL = "https://custom.signalfx.com/api";
-      
-      expect(process.env.SIGNALFX_BASE_URL).toBe("https://custom.signalfx.com/api");
+
+      expect(process.env.SIGNALFX_BASE_URL).toBe(
+        "https://custom.signalfx.com/api",
+      );
     });
 
     it("should handle missing SignalFx token", () => {
       delete process.env.SIGNALFX_ACCESS_TOKEN;
-      
+
       expect(process.env.SIGNALFX_ACCESS_TOKEN).toBeUndefined();
     });
   });
@@ -52,7 +54,7 @@ describe("SignalFx Integration", () => {
         name: "list_services",
         description: "List all available services in the SignalFx environment",
       };
-      
+
       expect(tool.name).toBe("list_services");
       expect(tool.description).toContain("SignalFx");
     });
@@ -71,7 +73,7 @@ describe("SignalFx Integration", () => {
           required: ["service_name"],
         },
       };
-      
+
       expect(tool.name).toBe("get_service_operations");
       expect(tool.inputSchema.required).toContain("service_name");
     });
@@ -91,7 +93,7 @@ describe("SignalFx Integration", () => {
           },
         },
       };
-      
+
       expect(tool.name).toBe("search_traces");
       expect(tool.inputSchema.properties.service).toBeDefined();
       expect(tool.inputSchema.properties.has_errors).toBeDefined();
@@ -111,7 +113,7 @@ describe("SignalFx Integration", () => {
           required: ["trace_id"],
         },
       };
-      
+
       expect(tool.name).toBe("get_trace_details");
       expect(tool.inputSchema.required).toContain("trace_id");
     });
@@ -128,7 +130,7 @@ describe("SignalFx Integration", () => {
           required: ["service"],
         },
       };
-      
+
       expect(tool.name).toBe("get_latency_metrics");
       expect(tool.inputSchema.required).toContain("service");
     });
@@ -145,7 +147,7 @@ describe("SignalFx Integration", () => {
           required: ["service"],
         },
       };
-      
+
       expect(tool.name).toBe("get_error_metrics");
       expect(tool.inputSchema.required).toContain("service");
     });
@@ -154,14 +156,14 @@ describe("SignalFx Integration", () => {
   describe("Capabilities", () => {
     it("should include signalfx in capabilities when configured", () => {
       const capabilities = ["splunk", "signalfx", "traces"];
-      
+
       expect(capabilities).toContain("signalfx");
       expect(capabilities).toContain("traces");
     });
 
     it("should not include signalfx in capabilities when not configured", () => {
       const capabilities = ["splunk"];
-      
+
       expect(capabilities).not.toContain("signalfx");
     });
   });
@@ -241,7 +243,7 @@ describe("SignalFx Integration", () => {
 
     it("should handle error responses", () => {
       const errorMessage = "SignalFx client not configured";
-      
+
       expect(() => {
         if (!process.env.SIGNALFX_ACCESS_TOKEN) {
           throw new Error(errorMessage);

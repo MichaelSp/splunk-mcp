@@ -5,14 +5,14 @@
 
 import axios, { type AxiosInstance } from "axios";
 import type {
-    ErrorMetrics,
-    LatencyMetrics,
-    Operation,
-    Service,
-    SignalFxConfig,
-    Trace,
-    TraceSearchCriteria,
-    TraceSearchResult,
+  ErrorMetrics,
+  LatencyMetrics,
+  Operation,
+  Service,
+  SignalFxConfig,
+  Trace,
+  TraceSearchCriteria,
+  TraceSearchResult,
 } from "./signalFx-types.js";
 
 export class SignalFxClient {
@@ -29,8 +29,7 @@ export class SignalFxClient {
 
     // Determine realm and base URL
     const realm = config.realm || "us0";
-    this.baseUrl =
-      config.baseUrl || `https://api.${realm}.signalfx.com/v2/apm`;
+    this.baseUrl = config.baseUrl || `https://api.${realm}.signalfx.com/v2/apm`;
 
     this.client = axios.create({
       baseURL: this.baseUrl,
@@ -91,12 +90,11 @@ export class SignalFxClient {
     }
 
     try {
-      this.log(
-        "🔍",
-        `Fetching operations for service: ${serviceName}`,
-      );
+      this.log("🔍", `Fetching operations for service: ${serviceName}`);
 
-      const response = await this.client.get(`/services/${serviceName}/operations`);
+      const response = await this.client.get(
+        `/services/${serviceName}/operations`,
+      );
 
       const operations: Operation[] = (response.data.operations || []).map(
         (op: Record<string, unknown>) => ({
@@ -107,7 +105,10 @@ export class SignalFxClient {
         }),
       );
 
-      this.log("✅", `Found ${operations.length} operations for ${serviceName}`);
+      this.log(
+        "✅",
+        `Found ${operations.length} operations for ${serviceName}`,
+      );
       return operations;
     } catch (error) {
       this.log(
@@ -122,10 +123,15 @@ export class SignalFxClient {
   /**
    * Search traces based on criteria
    */
-  async searchTraces(criteria: TraceSearchCriteria): Promise<TraceSearchResult> {
+  async searchTraces(
+    criteria: TraceSearchCriteria,
+  ): Promise<TraceSearchResult> {
     try {
       const query = this.buildTraceQuery(criteria);
-      this.log("🔍", `Searching traces with query: ${JSON.stringify(criteria)}`);
+      this.log(
+        "🔍",
+        `Searching traces with query: ${JSON.stringify(criteria)}`,
+      );
 
       const response = await this.client.post("/traces/search", query);
 
@@ -194,7 +200,10 @@ export class SignalFxClient {
         ? `/services/${service}/operations/${operation}/latency`
         : `/services/${service}/latency`;
 
-      this.log("📊", `Fetching latency metrics for ${service}${operation ? `/${operation}` : ""}`);
+      this.log(
+        "📊",
+        `Fetching latency metrics for ${service}${operation ? `/${operation}` : ""}`,
+      );
 
       const response = await this.client.get(path);
 
@@ -239,7 +248,10 @@ export class SignalFxClient {
         ? `/services/${service}/operations/${operation}/errors`
         : `/services/${service}/errors`;
 
-      this.log("📊", `Fetching error metrics for ${service}${operation ? `/${operation}` : ""}`);
+      this.log(
+        "📊",
+        `Fetching error metrics for ${service}${operation ? `/${operation}` : ""}`,
+      );
 
       const response = await this.client.get(path);
 
@@ -267,7 +279,9 @@ export class SignalFxClient {
   /**
    * Build query object for trace search
    */
-  private buildTraceQuery(criteria: TraceSearchCriteria): Record<string, unknown> {
+  private buildTraceQuery(
+    criteria: TraceSearchCriteria,
+  ): Record<string, unknown> {
     const query: Record<string, unknown> = {};
 
     if (criteria.service) {
@@ -312,27 +326,27 @@ export class SignalFxClient {
    * Parse trace data from API response
    */
   private parseTrace(traceData: Record<string, unknown>): Trace {
-    const spans = (traceData.spans as Array<Record<string, unknown>> || []).map(
-      (span) => {
-        const logs = span.logs as Array<Record<string, unknown>> | undefined;
-        return {
-          spanId: span.spanId as string,
-          traceId: span.traceId as string,
-          parentSpanId: span.parentSpanId as string | undefined,
-          operationName: span.operationName as string,
-          serviceName: span.serviceName as string,
-          startTime: (span.startTime as number) || 0,
-          duration: (span.duration as number) || 0,
-          tags: (span.tags as Record<string, string | number | boolean>) || {},
-          logs: logs?.map((log) => ({
-            timestamp: (log.timestamp as number) || 0,
-            fields: (log.fields as Record<string, unknown>) || {},
-          })),
-          status: (span.status as "ok" | "error" | "unset") || "unset",
-          errorMessage: span.errorMessage as string | undefined,
-        };
-      },
-    );
+    const spans = (
+      (traceData.spans as Array<Record<string, unknown>>) || []
+    ).map((span) => {
+      const logs = span.logs as Array<Record<string, unknown>> | undefined;
+      return {
+        spanId: span.spanId as string,
+        traceId: span.traceId as string,
+        parentSpanId: span.parentSpanId as string | undefined,
+        operationName: span.operationName as string,
+        serviceName: span.serviceName as string,
+        startTime: (span.startTime as number) || 0,
+        duration: (span.duration as number) || 0,
+        tags: (span.tags as Record<string, string | number | boolean>) || {},
+        logs: logs?.map((log) => ({
+          timestamp: (log.timestamp as number) || 0,
+          fields: (log.fields as Record<string, unknown>) || {},
+        })),
+        status: (span.status as "ok" | "error" | "unset") || "unset",
+        errorMessage: span.errorMessage as string | undefined,
+      };
+    });
 
     const services = Array.from(new Set(spans.map((s) => s.serviceName)));
     const startTime = Math.min(...spans.map((s) => s.startTime), Infinity);

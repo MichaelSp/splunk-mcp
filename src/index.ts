@@ -42,7 +42,9 @@ const signalFxConfig: SignalFxConfig | null = process.env.SIGNALFX_ACCESS_TOKEN
 const splunkClient = new SplunkClient(splunkConfig);
 
 // Create SignalFx client if configured
-const signalFxClient = signalFxConfig ? new SignalFxClient(signalFxConfig) : null;
+const signalFxClient = signalFxConfig
+  ? new SignalFxClient(signalFxConfig)
+  : null;
 
 // Define MCP tools
 const tools: Tool[] = [
@@ -180,8 +182,7 @@ const tools: Tool[] = [
   },
   {
     name: "get_service_operations",
-    description:
-      "Get operations available for a specific service in SignalFx.",
+    description: "Get operations available for a specific service in SignalFx.",
     inputSchema: {
       type: "object",
       properties: {
@@ -555,8 +556,8 @@ if (signalFxClient) {
         throw new Error("SignalFx client not configured");
       }
       const args =
-        (extra as unknown as { arguments?: Record<string, unknown> }).arguments ||
-        {};
+        (extra as unknown as { arguments?: Record<string, unknown> })
+          .arguments || {};
       const result = await signalFxClient.getServiceOperations(
         args.service_name as string,
       );
@@ -581,9 +582,9 @@ if (signalFxClient) {
         throw new Error("SignalFx client not configured");
       }
       const args =
-        (extra as unknown as { arguments?: Record<string, unknown> }).arguments ||
-        {};
-      
+        (extra as unknown as { arguments?: Record<string, unknown> })
+          .arguments || {};
+
       const criteria = {
         service: args.service as string | undefined,
         operation: args.operation as string | undefined,
@@ -593,7 +594,7 @@ if (signalFxClient) {
         limit: (args.limit as number) || 100,
         offset: (args.offset as number) || 0,
       };
-      
+
       const result = await signalFxClient.searchTraces(criteria);
       return {
         content: [
@@ -616,9 +617,11 @@ if (signalFxClient) {
         throw new Error("SignalFx client not configured");
       }
       const args =
-        (extra as unknown as { arguments?: Record<string, unknown> }).arguments ||
-        {};
-      const result = await signalFxClient.getTraceDetails(args.trace_id as string);
+        (extra as unknown as { arguments?: Record<string, unknown> })
+          .arguments || {};
+      const result = await signalFxClient.getTraceDetails(
+        args.trace_id as string,
+      );
       return {
         content: [
           {
@@ -640,8 +643,8 @@ if (signalFxClient) {
         throw new Error("SignalFx client not configured");
       }
       const args =
-        (extra as unknown as { arguments?: Record<string, unknown> }).arguments ||
-        {};
+        (extra as unknown as { arguments?: Record<string, unknown> })
+          .arguments || {};
       const result = await signalFxClient.getLatencyMetrics(
         args.service as string,
         args.operation as string | undefined,
@@ -667,8 +670,8 @@ if (signalFxClient) {
         throw new Error("SignalFx client not configured");
       }
       const args =
-        (extra as unknown as { arguments?: Record<string, unknown> }).arguments ||
-        {};
+        (extra as unknown as { arguments?: Record<string, unknown> })
+          .arguments || {};
       const result = await signalFxClient.getErrorMetrics(
         args.service as string,
         args.operation as string | undefined,
