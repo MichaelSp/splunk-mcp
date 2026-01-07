@@ -4,9 +4,24 @@
   "description": "A Model Context Protocol server for interacting with Splunk Enterprise/Cloud",
   "type": "module",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
     "splunk-mcp": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MichaelSp/splunk-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MichaelSp/splunk-mcp/issues"
+  },
+  "homepage": "https://github.com/MichaelSp/splunk-mcp#readme",
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
