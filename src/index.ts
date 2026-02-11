@@ -1,13 +1,22 @@
 #!/usr/bin/env node
 
+import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type {
   ServerNotification,
   ServerRequest,
 } from "@modelcontextprotocol/sdk/types.js";
 import { config } from "dotenv";
+import type { Express } from "express";
+import {
+  httpServerShutdown,
+  mcpDeleteHandler,
+  mcpGetHandler,
+  mcpPostHandler,
+} from "./server.js";
 import { SignalFxClient } from "./signalFx-client.js";
 import { SplunkClient } from "./splunk-client.js";
 import type { SignalFxConfig, SplunkConfig } from "./types.js";
@@ -16,6 +25,7 @@ import type { SignalFxConfig, SplunkConfig } from "./types.js";
 config();
 
 const VERSION = "0.3.0";
+const MCP_PORT = parseInt(process.env.MCP_PORT || "3000", 10);
 
 // Get configuration from environment
 const splunkConfig: SplunkConfig = {
@@ -59,7 +69,7 @@ function jsonResponse(data: unknown) {
 
 // Helper to extract arguments from MCP request
 function getArgs(
-  extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
+  extra: RequestHandlerExtra<ServerRequest, ServerNotification>
 ) {
   return (
     (extra as unknown as { arguments?: Record<string, unknown> }).arguments ||
@@ -77,7 +87,7 @@ const mcpServer = new McpServer(
     capabilities: {
       tools: {},
     },
-  },
+  }
 );
 
 // ============================================================================
@@ -97,16 +107,16 @@ mcpServer.registerTool(
         args.search_query as string,
         (args.earliest_time as string) || "-24h",
         (args.latest_time as string) || "now",
-        (args.max_results as number) || 100,
-      ),
+        (args.max_results as number) || 100
+      )
     );
-  },
+  }
 );
 
 mcpServer.registerTool(
   "list_indexes",
   { description: "Get a list of all available Splunk indexes." },
-  async () => jsonResponse(await splunkClient.listIndexes()),
+  async () => jsonResponse(await splunkClient.listIndexes())
 );
 
 mcpServer.registerTool(
@@ -115,15 +125,15 @@ mcpServer.registerTool(
   async (extra) => {
     const args = getArgs(extra);
     return jsonResponse(
-      await splunkClient.getIndexInfo(args.index_name as string),
+      await splunkClient.getIndexInfo(args.index_name as string)
     );
-  },
+  }
 );
 
 mcpServer.registerTool(
   "list_saved_searches",
   { description: "List all saved searches in Splunk." },
-  async () => jsonResponse(await splunkClient.listSavedSearches()),
+  async () => jsonResponse(await splunkClient.listSavedSearches())
 );
 
 mcpServer.registerTool(
@@ -132,13 +142,13 @@ mcpServer.registerTool(
     description:
       "Get information about the currently authenticated user including username, roles, and capabilities.",
   },
-  async () => jsonResponse(await splunkClient.getCurrentUser()),
+  async () => jsonResponse(await splunkClient.getCurrentUser())
 );
 
 mcpServer.registerTool(
   "list_users",
   { description: "List all Splunk users (requires admin privileges)." },
-  async () => jsonResponse(await splunkClient.listUsers()),
+  async () => jsonResponse(await splunkClient.listUsers())
 );
 
 mcpServer.registerTool(
@@ -147,7 +157,7 @@ mcpServer.registerTool(
     description:
       "List all KV store collections across apps with metadata including app, fields, and accelerated fields.",
   },
-  async () => jsonResponse(await splunkClient.listKVStoreCollections()),
+  async () => jsonResponse(await splunkClient.listKVStoreCollections())
 );
 
 mcpServer.registerTool(
@@ -156,7 +166,7 @@ mcpServer.registerTool(
     description:
       "Get basic Splunk connection information and list available apps.",
   },
-  async () => jsonResponse(await splunkClient.healthCheck()),
+  async () => jsonResponse(await splunkClient.healthCheck())
 );
 
 mcpServer.registerTool(
@@ -165,7 +175,7 @@ mcpServer.registerTool(
     description:
       "Get a list of all indexes and their sourcetypes with event counts and time range information.",
   },
-  async () => jsonResponse(await splunkClient.getIndexesAndSourcetypes()),
+  async () => jsonResponse(await splunkClient.getIndexesAndSourcetypes())
 );
 
 mcpServer.registerTool(
@@ -187,7 +197,7 @@ mcpServer.registerTool(
       protocol: "mcp",
       capabilities,
     });
-  },
+  }
 );
 
 mcpServer.registerTool(
@@ -196,7 +206,7 @@ mcpServer.registerTool(
     description:
       "Get basic Splunk connection information and list available apps (alias for health_check).",
   },
-  async () => jsonResponse(await splunkClient.healthCheck()),
+  async () => jsonResponse(await splunkClient.healthCheck())
 );
 
 // ============================================================================
@@ -210,7 +220,7 @@ if (signalFxClient) {
       description:
         "List all available services in the SignalFx environment with operation counts and error status.",
     },
-    async () => jsonResponse(await signalFxClient.listServices()),
+    async () => jsonResponse(await signalFxClient.listServices())
   );
 
   mcpServer.registerTool(
@@ -222,9 +232,9 @@ if (signalFxClient) {
     async (extra) => {
       const args = getArgs(extra);
       return jsonResponse(
-        await signalFxClient.getServiceOperations(args.service_name as string),
+        await signalFxClient.getServiceOperations(args.service_name as string)
       );
-    },
+    }
   );
 
   mcpServer.registerTool(
@@ -244,9 +254,9 @@ if (signalFxClient) {
           error: args.has_errors as boolean | undefined,
           limit: (args.limit as number) || 100,
           offset: (args.offset as number) || 0,
-        }),
+        })
       );
-    },
+    }
   );
 
   mcpServer.registerTool(
@@ -258,9 +268,9 @@ if (signalFxClient) {
     async (extra) => {
       const args = getArgs(extra);
       return jsonResponse(
-        await signalFxClient.getTraceDetails(args.trace_id as string),
+        await signalFxClient.getTraceDetails(args.trace_id as string)
       );
-    },
+    }
   );
 
   mcpServer.registerTool(
@@ -274,10 +284,10 @@ if (signalFxClient) {
       return jsonResponse(
         await signalFxClient.getLatencyMetrics(
           args.service as string,
-          args.operation as string | undefined,
-        ),
+          args.operation as string | undefined
+        )
       );
-    },
+    }
   );
 
   mcpServer.registerTool(
@@ -291,21 +301,56 @@ if (signalFxClient) {
       return jsonResponse(
         await signalFxClient.getErrorMetrics(
           args.service as string,
-          args.operation as string | undefined,
-        ),
+          args.operation as string | undefined
+        )
       );
-    },
+    }
   );
 }
 
 // Start the server
 async function main() {
-  const transport = new StdioServerTransport();
-  await mcpServer.connect(transport);
+  const args = process.argv.slice(2);
+  const modeFromArg = args.find((a) => a.startsWith("--mode="))?.split("=")[1];
+  const mode =
+    modeFromArg ?? (args.includes("--streamable") ? "streamable" : "stdio");
+
   const signalFxStatus = signalFxClient ? "✅ enabled" : "❌ disabled";
-  console.error("🚀 Splunk MCP server running on stdio");
-  console.error(`   - Splunk: ✅ enabled`);
-  console.error(`   - SignalFx Traces: ${signalFxStatus}`);
+
+  let transport: Transport;
+  let app: Express | undefined = undefined;
+  if (mode === "streamable") {
+    app = createMcpExpressApp();
+    app.post("/mcp", await mcpPostHandler(mcpServer));
+    app.get("/mcp", mcpGetHandler);
+    app.delete("/mcp", mcpDeleteHandler);
+    console.error(
+      `🚀 Splunk MCP server running on ${mode} on localhost:${MCP_PORT}`
+    );
+    console.error(`   - Splunk: ✅ enabled`);
+    console.error(`   - SignalFx Traces: ${signalFxStatus}`);
+    app.listen(MCP_PORT, (error: Error | undefined) => {
+      if (error) {
+        console.error("Failed to start server:", error);
+        process.exit(1);
+      }
+      console.log(`MCP Streamable HTTP Server listening on port ${MCP_PORT}`);
+    });
+    // Handle server shutdown
+    process.on("SIGINT", async () => {
+      console.log("Shutting down server...");
+
+      await httpServerShutdown();
+      console.log("Server shutdown complete");
+      process.exit(0);
+    });
+  } else {
+    transport = new StdioServerTransport();
+    await mcpServer.connect(transport);
+    console.error(`🚀 Splunk MCP server running on ${mode}`);
+    console.error(`   - Splunk: ✅ enabled`);
+    console.error(`   - SignalFx Traces: ${signalFxStatus}`);
+  }
 }
 
 main().catch((error) => {
