@@ -35,43 +35,41 @@ describe("SignalFxClient with Mocked API", () => {
 
   describe("listServices", () => {
     it("should successfully fetch and return services", async () => {
+      // listServices now uses GraphQL getTagValueAutocomplete
       const mockResponse = {
         data: {
-          services: [
-            {
-              name: "auth-service",
-              operationCount: 5,
-              hasErrors: false,
-              lastSeen: Date.now(),
+          data: {
+            getTagValueAutocomplete: {
+              values: ["auth-service", "payment-service"],
+              __typename: "TagValueAutocompleteResponse",
             },
-            {
-              name: "payment-service",
-              operationCount: 3,
-              hasErrors: true,
-              lastSeen: Date.now(),
-            },
-          ],
+          },
         },
       };
 
-      mockAxiosInstance.get.mockResolvedValueOnce(mockResponse);
+      mockAxiosInstance.post.mockResolvedValueOnce(mockResponse);
 
       const result = await client.listServices();
 
       expect(result).toHaveLength(2);
       expect(result[0].name).toBe("auth-service");
       expect(result[1].name).toBe("payment-service");
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith("/services");
+      expect(mockAxiosInstance.post).toHaveBeenCalled();
     });
 
     it("should handle empty services list", async () => {
       const mockResponse = {
         data: {
-          services: [],
+          data: {
+            getTagValueAutocomplete: {
+              values: [],
+              __typename: "TagValueAutocompleteResponse",
+            },
+          },
         },
       };
 
-      mockAxiosInstance.get.mockResolvedValueOnce(mockResponse);
+      mockAxiosInstance.post.mockResolvedValueOnce(mockResponse);
 
       const result = await client.listServices();
 
@@ -79,7 +77,7 @@ describe("SignalFxClient with Mocked API", () => {
     });
 
     it("should handle API errors", async () => {
-      mockAxiosInstance.get.mockRejectedValueOnce(new Error("Network error"));
+      mockAxiosInstance.post.mockRejectedValueOnce(new Error("Network error"));
 
       await expect(client.listServices()).rejects.toThrow("Network error");
     });
@@ -129,6 +127,7 @@ describe("SignalFxClient with Mocked API", () => {
   describe("searchTraces", () => {
     it("should search traces with full criteria", async () => {
       const criteria = {
+        environment: "production",
         service: "auth-service",
         operation: "login",
         minDuration: 100,
@@ -138,110 +137,161 @@ describe("SignalFxClient with Mocked API", () => {
         offset: 10,
       };
 
-      const mockResponse = {
+      // Mock StartAnalyticsSearch response (GraphQL returns response.data.data)
+      const startSearchResponse = {
         data: {
-          traces: [
-            {
-              traceId: "trace-123",
-              spans: [
-                {
-                  spanId: "span-1",
-                  traceId: "trace-123",
-                  operationName: "login",
-                  serviceName: "auth-service",
-                  startTime: 1000000,
-                  duration: 100,
-                  tags: { "http.status_code": 200 },
-                  status: "ok",
-                },
-              ],
-            },
-          ],
-          totalCount: 1,
+          data: {
+            startAnalyticsSearch: { jobId: "job-123" },
+          },
         },
       };
 
-      mockAxiosInstance.post.mockResolvedValueOnce(mockResponse);
+      // Mock GetAnalyticsSearch response
+      const getSearchResponse = {
+        data: {
+          data: {
+            getAnalyticsSearch: JSON.stringify({
+              jobId: "job-123",
+              sections: [
+                {
+                  sectionType: "traceExamples",
+                  isComplete: true,
+                  legacyTraceExamples: [
+                    {
+                      traceId: "trace-123",
+                      initiatingService: "auth-service",
+                      initiatingOperation: "login",
+                      startTimeMicros: 1000000000,
+                      durationMicros: 100000,
+                      serviceSpanCounts: [],
+                      initiatingSpanWasError: false,
+                      hasCallGraph: true,
+                    },
+                  ],
+                },
+              ],
+            }),
+          },
+        },
+      };
+
+      mockAxiosInstance.post
+        .mockResolvedValueOnce(startSearchResponse)
+        .mockResolvedValueOnce(getSearchResponse);
 
       const result = await client.searchTraces(criteria);
 
       expect(result.traces).toHaveLength(1);
-      expect(result.totalCount).toBe(1);
-      expect(result.limit).toBe(50);
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        "/traces/search",
-        expect.objectContaining({
-          service: "auth-service",
-          operation: "login",
-        }),
-      );
+      expect(result.traces[0].traceId).toBe("trace-123");
+      expect(mockAxiosInstance.post).toHaveBeenCalledTimes(2);
     });
 
     it("should search traces with minimal criteria", async () => {
       const criteria = {
+        environment: "staging",
         service: "api-gateway",
       };
 
-      const mockResponse = {
+      // Mock StartAnalyticsSearch response (GraphQL returns response.data.data)
+      const startSearchResponse = {
         data: {
-          traces: [],
-          totalCount: 0,
+          data: {
+            startAnalyticsSearch: "job-456",
+          },
         },
       };
 
-      mockAxiosInstance.post.mockResolvedValueOnce(mockResponse);
+      // Mock GetAnalyticsSearch response
+      const getSearchResponse = {
+        data: {
+          data: {
+            getAnalyticsSearch: JSON.stringify({
+              jobId: "job-456",
+              sections: [
+                {
+                  sectionType: "traceExamples",
+                  isComplete: true,
+                  legacyTraceExamples: [],
+                },
+              ],
+            }),
+          },
+        },
+      };
+
+      mockAxiosInstance.post
+        .mockResolvedValueOnce(startSearchResponse)
+        .mockResolvedValueOnce(getSearchResponse);
 
       const result = await client.searchTraces(criteria);
 
       expect(result.traces).toHaveLength(0);
-      expect(result.totalCount).toBe(0);
     });
   });
 
   describe("getTraceDetails", () => {
     it("should fetch detailed trace information", async () => {
       const traceId = "trace-456";
+      // getTraceDetails now uses GraphQL exclusively
       const mockResponse = {
         data: {
-          traceId,
-          spans: [
-            {
-              spanId: "span-1",
-              traceId,
-              operationName: "http.request",
-              serviceName: "api-gateway",
+          data: {
+            trace: {
+              traceID: traceId,
+              rootOperation: "http.request",
+              duration: 150000,
               startTime: 1000000,
-              duration: 150,
-              tags: {
-                "http.url": "https://api.example.com/users",
-                "http.method": "GET",
-              },
-              status: "ok",
-            },
-            {
-              spanId: "span-2",
-              traceId,
-              parentSpanId: "span-1",
-              operationName: "db.query",
-              serviceName: "user-service",
-              startTime: 1000010,
-              duration: 50,
-              tags: {
-                "db.type": "postgresql",
-              },
-              logs: [
+              spans: [
                 {
-                  timestamp: 1000020,
-                  fields: { event: "query_start" },
+                  traceID: traceId,
+                  spanID: "span-1",
+                  operationName: "http.request",
+                  serviceName: "api-gateway",
+                  startTime: 1000000,
+                  duration: 150,
+                  references: [],
+                  tags: [
+                    {
+                      key: "http.url",
+                      type: "string",
+                      value: "https://api.example.com/users",
+                    },
+                    { key: "http.method", type: "string", value: "GET" },
+                  ],
+                  logs: [],
+                },
+                {
+                  traceID: traceId,
+                  spanID: "span-2",
+                  operationName: "db.query",
+                  serviceName: "user-service",
+                  startTime: 1000010,
+                  duration: 50,
+                  references: [
+                    { refType: "CHILD_OF", traceID: traceId, spanID: "span-1" },
+                  ],
+                  tags: [
+                    { key: "db.type", type: "string", value: "postgresql" },
+                  ],
+                  logs: [
+                    {
+                      timestamp: 1000020,
+                      fields: [
+                        { key: "event", type: "string", value: "query_start" },
+                      ],
+                    },
+                  ],
                 },
               ],
-              status: "ok",
+              processes: [],
+              errors: [],
+              globalTags: [],
             },
-          ],
+          },
         },
       };
 
-      mockAxiosInstance.get.mockResolvedValueOnce(mockResponse);
+      mockAxiosInstance.post.mockResolvedValueOnce(mockResponse);
 
       const result = await client.getTraceDetails(traceId);
 
@@ -251,31 +301,48 @@ describe("SignalFxClient with Mocked API", () => {
       expect(result.services).toContain("user-service");
       expect(result.spans[1].logs).toHaveLength(1);
       expect(result.spans[1].logs?.[0].timestamp).toBe(1000020);
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith(`/traces/${traceId}`);
+      expect(mockAxiosInstance.post).toHaveBeenCalled();
     });
 
     it("should handle trace with error", async () => {
       const traceId = "trace-error-001";
       const mockResponse = {
         data: {
-          traceId,
-          spans: [
-            {
-              spanId: "span-error",
-              traceId,
-              operationName: "payment.process",
-              serviceName: "payment-service",
+          data: {
+            trace: {
+              traceID: traceId,
+              rootOperation: "payment.process",
+              duration: 200000,
               startTime: 1000000,
-              duration: 200,
-              tags: {},
-              status: "error",
-              errorMessage: "Insufficient funds",
+              spans: [
+                {
+                  traceID: traceId,
+                  spanID: "span-error",
+                  operationName: "payment.process",
+                  serviceName: "payment-service",
+                  startTime: 1000000,
+                  duration: 200,
+                  references: [],
+                  tags: [
+                    { key: "error", type: "bool", value: "true" },
+                    {
+                      key: "error.message",
+                      type: "string",
+                      value: "Insufficient funds",
+                    },
+                  ],
+                  logs: [],
+                },
+              ],
+              processes: [],
+              errors: [],
+              globalTags: [],
             },
-          ],
+          },
         },
       };
 
-      mockAxiosInstance.get.mockResolvedValueOnce(mockResponse);
+      mockAxiosInstance.post.mockResolvedValueOnce(mockResponse);
 
       const result = await client.getTraceDetails(traceId);
 

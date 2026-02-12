@@ -11,6 +11,7 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import { config } from "dotenv";
 import type { Express } from "express";
+import { z } from "zod";
 import {
   httpServerShutdown,
   mcpDeleteHandler,
@@ -67,14 +68,27 @@ function jsonResponse(data: unknown) {
   };
 }
 
-// Helper to extract arguments from MCP request
+// Helper to extract arguments from MCP request (for tools without Zod schema)
 function getArgs(
-  extra: RequestHandlerExtra<ServerRequest, ServerNotification>
+  extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
 ) {
-  return (
-    (extra as unknown as { arguments?: Record<string, unknown> }).arguments ||
-    {}
-  );
+  const extra_obj = extra as unknown as Record<string, unknown>;
+  let args: Record<string, unknown> = {};
+
+  if (extra_obj.requestInfo) {
+    const info = extra_obj.requestInfo as Record<string, unknown>;
+    if (info.params && typeof info.params === "object") {
+      const params = info.params as Record<string, unknown>;
+      if (params.arguments) {
+        args = params.arguments as Record<string, unknown>;
+      }
+    }
+    if (!Object.keys(args).length && info.arguments) {
+      args = info.arguments as Record<string, unknown>;
+    }
+  }
+
+  return args;
 }
 
 // Create MCP server using the high-level McpServer API
@@ -87,7 +101,7 @@ const mcpServer = new McpServer(
     capabilities: {
       tools: {},
     },
-  }
+  },
 );
 
 // ============================================================================
@@ -97,8 +111,7 @@ const mcpServer = new McpServer(
 mcpServer.registerTool(
   "search_splunk",
   {
-    description:
-      "Execute a Splunk search query and return the results.\n\nArgs:\n    search_query: The search query to execute\n    earliest_time: Start time for the search (default: 24 hours ago)\n    latest_time: End time for the search (default: now)\n    max_results: Maximum number of results to return (default: 100)",
+    description: "Execute a Splunk search query and return results.",
   },
   async (extra) => {
     const args = getArgs(extra);
@@ -107,16 +120,16 @@ mcpServer.registerTool(
         args.search_query as string,
         (args.earliest_time as string) || "-24h",
         (args.latest_time as string) || "now",
-        (args.max_results as number) || 100
-      )
+        (args.max_results as number) || 100,
+      ),
     );
-  }
+  },
 );
 
 mcpServer.registerTool(
   "list_indexes",
   { description: "Get a list of all available Splunk indexes." },
-  async () => jsonResponse(await splunkClient.listIndexes())
+  async () => jsonResponse(await splunkClient.listIndexes()),
 );
 
 mcpServer.registerTool(
@@ -125,15 +138,15 @@ mcpServer.registerTool(
   async (extra) => {
     const args = getArgs(extra);
     return jsonResponse(
-      await splunkClient.getIndexInfo(args.index_name as string)
+      await splunkClient.getIndexInfo(args.index_name as string),
     );
-  }
+  },
 );
 
 mcpServer.registerTool(
   "list_saved_searches",
   { description: "List all saved searches in Splunk." },
-  async () => jsonResponse(await splunkClient.listSavedSearches())
+  async () => jsonResponse(await splunkClient.listSavedSearches()),
 );
 
 mcpServer.registerTool(
@@ -142,13 +155,13 @@ mcpServer.registerTool(
     description:
       "Get information about the currently authenticated user including username, roles, and capabilities.",
   },
-  async () => jsonResponse(await splunkClient.getCurrentUser())
+  async () => jsonResponse(await splunkClient.getCurrentUser()),
 );
 
 mcpServer.registerTool(
   "list_users",
   { description: "List all Splunk users (requires admin privileges)." },
-  async () => jsonResponse(await splunkClient.listUsers())
+  async () => jsonResponse(await splunkClient.listUsers()),
 );
 
 mcpServer.registerTool(
@@ -157,7 +170,7 @@ mcpServer.registerTool(
     description:
       "List all KV store collections across apps with metadata including app, fields, and accelerated fields.",
   },
-  async () => jsonResponse(await splunkClient.listKVStoreCollections())
+  async () => jsonResponse(await splunkClient.listKVStoreCollections()),
 );
 
 mcpServer.registerTool(
@@ -166,7 +179,7 @@ mcpServer.registerTool(
     description:
       "Get basic Splunk connection information and list available apps.",
   },
-  async () => jsonResponse(await splunkClient.healthCheck())
+  async () => jsonResponse(await splunkClient.healthCheck()),
 );
 
 mcpServer.registerTool(
@@ -175,7 +188,7 @@ mcpServer.registerTool(
     description:
       "Get a list of all indexes and their sourcetypes with event counts and time range information.",
   },
-  async () => jsonResponse(await splunkClient.getIndexesAndSourcetypes())
+  async () => jsonResponse(await splunkClient.getIndexesAndSourcetypes()),
 );
 
 mcpServer.registerTool(
@@ -197,7 +210,7 @@ mcpServer.registerTool(
       protocol: "mcp",
       capabilities,
     });
-  }
+  },
 );
 
 mcpServer.registerTool(
@@ -206,7 +219,7 @@ mcpServer.registerTool(
     description:
       "Get basic Splunk connection information and list available apps (alias for health_check).",
   },
-  async () => jsonResponse(await splunkClient.healthCheck())
+  async () => jsonResponse(await splunkClient.healthCheck()),
 );
 
 // ============================================================================
@@ -215,12 +228,32 @@ mcpServer.registerTool(
 
 if (signalFxClient) {
   mcpServer.registerTool(
+    "list_environments",
+    {
+      description:
+        "List all available environments (e.g., dev, prod, staging) in the SignalFx instance. " +
+        "Environments are typically tagged with 'sf_environment' and represent different deployment stages or regions.",
+    },
+    async () => jsonResponse(await signalFxClient.listEnvironments()),
+  );
+
+  mcpServer.registerTool(
     "list_services",
     {
       description:
-        "List all available services in the SignalFx environment with operation counts and error status.",
+        "List all available services in the SignalFx environment with operation counts and error status.\n\n" +
+        "Args:\n" +
+        "    environment: Optional environment name to filter services (e.g., 'prod', 'dev', 'staging'). " +
+        "Use list_environments to see available environments.",
     },
-    async () => jsonResponse(await signalFxClient.listServices())
+    async (extra) => {
+      const args = getArgs(extra);
+      return jsonResponse(
+        await signalFxClient.listServices(
+          args.environment as string | undefined,
+        ),
+      );
+    },
   );
 
   mcpServer.registerTool(
@@ -232,45 +265,189 @@ if (signalFxClient) {
     async (extra) => {
       const args = getArgs(extra);
       return jsonResponse(
-        await signalFxClient.getServiceOperations(args.service_name as string)
+        await signalFxClient.getServiceOperations(args.service_name as string),
       );
-    }
+    },
   );
 
   mcpServer.registerTool(
     "search_traces",
     {
       description:
-        "Search for traces in SignalFx based on service, operation, duration, errors, and other criteria.\n\nArgs:\n    service: Filter by service name (optional)\n    operation: Filter by operation name (optional)\n    min_duration: Minimum duration in milliseconds (optional)\n    max_duration: Maximum duration in milliseconds (optional)\n    has_errors: Filter for traces with errors (optional, true/false)\n    limit: Maximum number of traces to return (default: 100)",
+        "Search for traces in SignalFx. Automatically uses GraphQL Analytics API for GraphQL-enabled instances or REST API for standard instances.\n\n" +
+        "Args:\n" +
+        "    environment: Environment name to search in (REQUIRED - use list_environments to see available options)\n" +
+        "    service: Filter by service name (optional)\n" +
+        "    operation: Filter by operation name (optional)\n" +
+        "    start_time: Start time in milliseconds (Unix timestamp, optional, default: 15 minutes ago)\n" +
+        "    end_time: End time in milliseconds (Unix timestamp, optional, default: now)\n" +
+        "    has_errors: Filter for traces with errors (optional, true/false)\n" +
+        "    tags: Additional tag filters as key-value pairs (optional)\n" +
+        "    limit: Maximum number of traces to return (default: 100)\n\n" +
+        "Note: For GraphQL-enabled instances, uses the GraphQL analytics search API with automatic job polling.",
+      inputSchema: {
+        environment: z
+          .string()
+          .describe("Environment name (use list_environments to see options)"),
+        service: z
+          .string()
+          .optional()
+          .describe(
+            "Filter by service name (use list_services to see options)",
+          ),
+        operation: z.string().optional().describe("Filter by operation name"),
+        start_time: z
+          .number()
+          .optional()
+          .describe("Start time in milliseconds (Unix timestamp)"),
+        end_time: z
+          .number()
+          .optional()
+          .describe("End time in milliseconds (Unix timestamp)"),
+        min_duration: z
+          .number()
+          .optional()
+          .describe("Minimum trace duration in milliseconds"),
+        max_duration: z
+          .number()
+          .optional()
+          .describe("Maximum trace duration in milliseconds"),
+        has_errors: z
+          .boolean()
+          .optional()
+          .describe("Filter for traces with errors"),
+        tags: z
+          .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+          .optional()
+          .describe("Additional tag filters"),
+        limit: z
+          .number()
+          .optional()
+          .describe("Maximum number of traces to return"),
+        offset: z.number().optional().describe("Pagination offset"),
+        max_poll_attempts: z
+          .number()
+          .optional()
+          .describe("Max poll attempts for async search (default: 60)"),
+        poll_interval_ms: z
+          .number()
+          .optional()
+          .describe("Poll interval in milliseconds (default: 1000)"),
+      },
+    },
+    async (args, _extra) => {
+      return jsonResponse(
+        await signalFxClient.searchTraces(
+          {
+            environment: args.environment,
+            service: args.service,
+            operation: args.operation,
+            startTime: args.start_time,
+            endTime: args.end_time,
+            minDuration: args.min_duration,
+            maxDuration: args.max_duration,
+            error: args.has_errors,
+            tags: args.tags as
+              | Record<string, string | number | boolean>
+              | undefined,
+            limit: args.limit || 100,
+            offset: args.offset || 0,
+          },
+          {
+            maxPollAttempts: args.max_poll_attempts,
+            pollIntervalMs: args.poll_interval_ms,
+          },
+        ),
+      );
+    },
+  );
+
+  mcpServer.registerTool(
+    "list_trace_tag_names",
+    {
+      description:
+        "List available tag names that can be used to filter traces. " +
+        "Returns indexed and unindexed tag names available in the specified time range.\n\n" +
+        "Args:\n" +
+        "    start_time: Start time in milliseconds (Unix timestamp, optional, default: 15 minutes ago)\n" +
+        "    end_time: End time in milliseconds (Unix timestamp, optional, default: now)\n" +
+        "    tag_name_prefix: Filter tag names by prefix (optional)\n" +
+        "    limit: Maximum number of results (default: 50)",
     },
     async (extra) => {
       const args = getArgs(extra);
+      const now = Date.now();
+      const startTime = (args.start_time as number) || now - 15 * 60 * 1000;
+      const endTime = (args.end_time as number) || now;
+
       return jsonResponse(
-        await signalFxClient.searchTraces({
-          service: args.service as string | undefined,
-          operation: args.operation as string | undefined,
-          minDuration: args.min_duration as number | undefined,
-          maxDuration: args.max_duration as number | undefined,
-          error: args.has_errors as boolean | undefined,
-          limit: (args.limit as number) || 100,
-          offset: (args.offset as number) || 0,
-        })
+        await signalFxClient.getTagNameAutocomplete(
+          { gte: startTime, lte: endTime },
+          (args.tag_name_prefix as string) || "",
+          (args.limit as number) || 50,
+        ),
       );
-    }
+    },
+  );
+
+  mcpServer.registerTool(
+    "list_trace_tag_values",
+    {
+      description:
+        "List available values for a specific tag name. Useful for discovering service names, " +
+        "operations, environments, and other tag values.\n\n" +
+        "Args:\n" +
+        "    tag_name: The tag name to get values for (required, e.g., 'sf_service', 'sf_environment')\n" +
+        "    start_time: Start time in milliseconds (Unix timestamp, optional, default: 15 minutes ago)\n" +
+        "    end_time: End time in milliseconds (Unix timestamp, optional, default: now)\n" +
+        "    tag_value_prefix: Filter values by prefix (optional)\n" +
+        "    limit: Maximum number of results (default: 50)",
+    },
+    async (extra) => {
+      const args = getArgs(extra);
+      const tagName = args.tag_name as string;
+
+      if (!tagName) {
+        throw new Error("tag_name is required");
+      }
+
+      const now = Date.now();
+      const startTime = (args.start_time as number) || now - 15 * 60 * 1000;
+      const endTime = (args.end_time as number) || now;
+
+      return jsonResponse(
+        await signalFxClient.getTagValueAutocomplete(
+          tagName,
+          { gte: startTime, lte: endTime },
+          (args.tag_value_prefix as string) || "",
+          [],
+          (args.limit as number) || 50,
+        ),
+      );
+    },
   );
 
   mcpServer.registerTool(
     "get_trace_details",
     {
       description:
-        "Get detailed information about a specific trace including all spans, tags, and timing information.",
+        "Get detailed information about a specific trace including all spans, tags, and timing information.\n\n" +
+        "Args:\n" +
+        "    trace_id: The trace ID to fetch details for (required)\n" +
+        "    environment: The environment name (optional, used for GraphQL instances)",
+      inputSchema: {
+        trace_id: z.string().describe("The trace ID to fetch details for"),
+        environment: z
+          .string()
+          .optional()
+          .describe("The environment name for filtering"),
+      },
     },
-    async (extra) => {
-      const args = getArgs(extra);
+    async (args, _extra) => {
       return jsonResponse(
-        await signalFxClient.getTraceDetails(args.trace_id as string)
+        await signalFxClient.getTraceDetails(args.trace_id, args.environment),
       );
-    }
+    },
   );
 
   mcpServer.registerTool(
@@ -284,10 +461,10 @@ if (signalFxClient) {
       return jsonResponse(
         await signalFxClient.getLatencyMetrics(
           args.service as string,
-          args.operation as string | undefined
-        )
+          args.operation as string | undefined,
+        ),
       );
-    }
+    },
   );
 
   mcpServer.registerTool(
@@ -301,10 +478,10 @@ if (signalFxClient) {
       return jsonResponse(
         await signalFxClient.getErrorMetrics(
           args.service as string,
-          args.operation as string | undefined
-        )
+          args.operation as string | undefined,
+        ),
       );
-    }
+    },
   );
 }
 
@@ -318,14 +495,14 @@ async function main() {
   const signalFxStatus = signalFxClient ? "✅ enabled" : "❌ disabled";
 
   let transport: Transport;
-  let app: Express | undefined = undefined;
+  let app: Express | undefined;
   if (mode === "streamable") {
     app = createMcpExpressApp();
     app.post("/mcp", await mcpPostHandler(mcpServer));
     app.get("/mcp", mcpGetHandler);
     app.delete("/mcp", mcpDeleteHandler);
     console.error(
-      `🚀 Splunk MCP server running on ${mode} on localhost:${MCP_PORT}`
+      `🚀 Splunk MCP server running on ${mode} on localhost:${MCP_PORT}`,
     );
     console.error(`   - Splunk: ✅ enabled`);
     console.error(`   - SignalFx Traces: ${signalFxStatus}`);

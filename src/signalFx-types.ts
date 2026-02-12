@@ -41,10 +41,19 @@ export interface Trace {
 }
 
 /**
+ * Environment information
+ */
+export interface Environment {
+  name: string;
+  serviceCount?: number;
+}
+
+/**
  * Service information
  */
 export interface Service {
   name: string;
+  environment?: string;
   operationCount: number;
   hasErrors: boolean;
   lastSeen: number;
@@ -64,6 +73,7 @@ export interface Operation {
  * Trace search filter criteria
  */
 export interface TraceSearchCriteria {
+  environment: string; // Required - specifies the environment to search
   service?: string;
   operation?: string;
   tags?: Record<string, string | number | boolean>;
@@ -74,6 +84,14 @@ export interface TraceSearchCriteria {
   offset?: number;
   startTime?: number;
   endTime?: number;
+}
+
+/**
+ * Polling options for async trace search jobs
+ */
+export interface TraceSearchPollOptions {
+  maxPollAttempts?: number;
+  pollIntervalMs?: number;
 }
 
 /**
@@ -138,4 +156,81 @@ export interface TraceSummary {
   hasErrors: boolean;
   errorCount: number;
   criticalPath?: string[];
+}
+
+/**
+ * GraphQL Analytics Search Parameters
+ */
+export interface AnalyticsSearchParameters {
+  sharedParameters: {
+    timeRangeMillis: {
+      gte: number;
+      lte: number;
+    };
+    filters: Array<{
+      traceFilter: {
+        tags: Array<{
+          tag: string;
+          operation: string;
+          values: string[];
+        }>;
+      };
+      spanFilters?: Array<{
+        tags: Array<{
+          tag: string;
+          operation: string;
+          values: string[];
+        }>;
+      }>;
+      filterType: string;
+    }>;
+    samplingFactor: number;
+  };
+  sectionsParameters: Array<{
+    sectionType: string;
+    limit?: number;
+  }>;
+}
+
+/**
+ * GraphQL Analytics Search Job Response
+ */
+export interface AnalyticsSearchJob {
+  jobId: string;
+  sections: Array<{
+    sectionType: string;
+    isComplete: boolean;
+    legacyTraceExamples?: Array<{
+      traceId: string;
+      initiatingOperation: string;
+      initiatingService: string;
+      startTimeMicros: number;
+      durationMicros: number;
+      serviceSpanCounts: Array<{
+        service: string;
+        spanCount: number;
+        errors: Array<unknown>;
+      }>;
+      initiatingSpanWasError: boolean;
+      hasCallGraph: boolean;
+    }>;
+    data?: Array<unknown>;
+  }>;
+}
+
+/**
+ * Tag Autocomplete Response
+ */
+export interface TagAutocompleteResponse {
+  indexed: string[];
+  unindexed: string[];
+  impactedIndexed: string[];
+  impactedUnindexed: string[];
+}
+
+/**
+ * Tag Value Autocomplete Response
+ */
+export interface TagValueAutocompleteResponse {
+  values: string[];
 }

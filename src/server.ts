@@ -1,10 +1,10 @@
+import { randomUUID } from "node:crypto";
+import type { IncomingMessage } from "node:http";
 import { InMemoryEventStore } from "@modelcontextprotocol/sdk/examples/shared/inMemoryEventStore.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
-import { randomUUID } from "crypto";
 import type { Request as ExRequest, Response as ExResponse } from "express";
-import { IncomingMessage } from "http";
 
 const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
@@ -13,7 +13,7 @@ export async function httpServerShutdown() {
   for (const sessionId in transports) {
     try {
       console.log(`Closing transport for session ${sessionId}`);
-      await transports[sessionId]!.close();
+      await transports[sessionId]?.close();
       delete transports[sessionId];
     } catch (error) {
       console.error(`Error closing transport for session ${sessionId}:`, error);
@@ -53,7 +53,7 @@ export async function mcpPostHandler(mcpServer: McpServer) {
           const sid = transport.sessionId;
           if (sid && transports[sid]) {
             console.log(
-              `Transport closed for session ${sid}, removing from transports map`
+              `Transport closed for session ${sid}, removing from transports map`,
             );
             delete transports[sid];
           }
@@ -99,7 +99,7 @@ export async function mcpPostHandler(mcpServer: McpServer) {
 
 export async function mcpGetHandler(
   req: ExRequest,
-  res: ExResponse
+  res: ExResponse,
 ): Promise<void> {
   const sessionId = req.get("mcp-session-id") as string | undefined;
   if (!sessionId || !transports[sessionId]) {
